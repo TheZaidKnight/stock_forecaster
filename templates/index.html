@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stock Forecaster</title>
+</head>
+<body>
+    <h1>Stock Price Forecaster</h1>
+    <form action="/forecast" method="post">
+        <label for="ticker">Stock Ticker:</label>
+        <input type="text" id="ticker" name="ticker" value="AAPL" required><br><br>
+        
+        <label for="days_history">Days of Historical Data (e.g., 90):</label>
+        <input type="number" id="days_history" name="days_history" value="90" required><br><br>
+        
+        <label for="forecast_horizon">Forecast Horizon (in days, e.g., 7):</label>
+        <input type="number" id="forecast_horizon" name="forecast_horizon" value="7" required><br><br>
+        
+        <input type="submit" value="Get Forecast">
+    </form>
+</body>
+</html>

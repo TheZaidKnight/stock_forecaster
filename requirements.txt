@@ -1,0 +1,13 @@
+# requirements.txt
+yfinance
+requests
+beautifulsoup4
+pandas
+feedparser
+python-dateutil
+pymongo
+statsmodels
+scikit-learn
+tensorflow
+plotly
+flask
