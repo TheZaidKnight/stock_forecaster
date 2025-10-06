@@ -13,9 +13,17 @@ NEWS_API_KEY = "c8f0485fa7084f5f97232c6591e4c9d1"
 # --- Database Connection ---
 def get_db_connection():
     """Establishes a connection to the local MongoDB server."""
-    client = MongoClient('mongodb://localhost:27017/')
-    db = client['stock_data'] # Database named 'stock_data'
-    return db
+    try:
+        client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=5000)
+        # Test the connection
+        client.server_info()
+        db = client['stock_data'] # Database named 'stock_data'
+        print("Successfully connected to MongoDB")
+        return db
+    except Exception as e:
+        print(f"Warning: Could not connect to MongoDB: {e}")
+        print("Running in offline mode - data will not be persisted")
+        return None
 
 def get_news_from_api(ticker_symbol):
     """
@@ -133,80 +141,121 @@ def get_financial_news(ticker_symbol):
     print(f"Final result: {total_articles} unique news articles for {ticker_symbol}")
     return news_by_date
 
-def get_historical_data(ticker_symbol: str, days: int) -> pd.DataFrame:
+def get_historical_data(ticker_symbol: str, days: int, *, interval: str = '1d') -> pd.DataFrame:
     """
     Fetches historical stock or crypto data for a specified number of latest days.
     """
     try:
+        print(f"Fetching {days} days of historical data for {ticker_symbol}...")
+        
         # Fetch enough data to calculate a 7-day MA
         end_date = datetime.now().strftime('%Y-%m-%d')
         start_date = (datetime.now() - timedelta(days=days + 10)).strftime('%Y-%m-%d') # Add buffer for non-trading days
         
         ticker = yf.Ticker(ticker_symbol)
-        hist_data = ticker.history(start=start_date, end=end_date)
+        # Use interval for intraday (e.g., '60m') or daily ('1d')
+        hist_data = ticker.history(start=start_date, end=end_date, interval=interval)
+        
+        if hist_data.empty:
+            print(f"No data returned for {ticker_symbol}")
+            return None
         
         # Trim the data to the user's requested number of days
+        # For intraday, days approximates number of periods; otherwise use tail(days)
         hist_data = hist_data.tail(days)
         
+        # Validate data quality
+        if len(hist_data) < 10:
+            print(f"Insufficient data for {ticker_symbol}: only {len(hist_data)} days available")
+            return None
+            
+        # Check for missing values
+        missing_values = hist_data.isnull().sum().sum()
+        if missing_values > 0:
+            print(f"Warning: {missing_values} missing values found in data for {ticker_symbol}")
+            hist_data = hist_data.fillna(method='ffill')  # Forward fill missing values
+        
+        print(f"Successfully fetched {len(hist_data)} days of data for {ticker_symbol}")
         return hist_data
+        
     except Exception as e:
         print(f"Error fetching historical data for {ticker_symbol}: {e}")
         return None
 
 
 # --- Main Data Processing and Storage Function ---
-def process_and_store_data(ticker_symbol, days):
+def process_and_store_data(ticker_symbol, days, *, horizon_unit: str = 'days'):
     """
     Fetches, processes, and stores all data in MongoDB.
     """
     print(f"\n{'='*60}\nProcessing data for {ticker_symbol}\n{'='*60}")
     
     db = get_db_connection()
-    historical_prices_collection = db['historical_prices']
-    news_articles_collection = db['news_articles']
-
+    
     # 1. Fetch Historical Data
-    historical_df = get_historical_data(ticker_symbol, days)
+    interval = '1d'
+    if horizon_unit == 'hours':
+        # Use hourly data for hourly forecasts
+        interval = '60m'
+    historical_df = get_historical_data(ticker_symbol, days, interval=interval)
     if historical_df is None or historical_df.empty:
         print("Could not retrieve historical data. Exiting.")
         return None
 
-    historical_df['7_day_MA'] = historical_df['Close'].rolling(window=7).mean()
+    # Calculate technical indicators (rename to be generic for intraday)
+    window = 7
+    historical_df['7_day_MA'] = historical_df['Close'].rolling(window=window).mean()
     historical_df['Daily_Return'] = historical_df['Close'].pct_change()
-    historical_df['7_day_Volatility'] = historical_df['Daily_Return'].rolling(window=7).std()
+    historical_df['7_day_Volatility'] = historical_df['Daily_Return'].rolling(window=window).std()
+    
+    # Fill any remaining NaN values
+    historical_df = historical_df.fillna(method='ffill').fillna(method='bfill')
     
     # 2. Fetch News Data
     news_by_date = get_financial_news(ticker_symbol)
 
-    # 3. Store Data in MongoDB
-    # Store historical data
-    historical_df.reset_index(inplace=True)
-    records = historical_df.to_dict('records')
-    for record in records:
-        record['ticker'] = ticker_symbol
-        # Use date and ticker as a unique identifier to avoid duplicates
-        historical_prices_collection.update_one(
-            {'Date': record['Date'], 'ticker': ticker_symbol},
-            {'$set': record},
-            upsert=True
-        )
-    print(f"Stored {len(records)} historical price points in MongoDB.")
+    # 3. Store Data in MongoDB (if connection available)
+    if db is not None:
+        try:
+            historical_prices_collection = db['historical_prices']
+            news_articles_collection = db['news_articles']
 
-    # Store news articles
-    news_records = []
-    for date, headlines in news_by_date.items():
-        for headline in headlines:
-            news_records.append({
-                'date': datetime.strptime(date, '%Y-%m-%d'),
-                'headline': headline,
-                'ticker': ticker_symbol
-            })
-    
-    if news_records:
-        # Delete old news for the ticker to avoid stale data
-        news_articles_collection.delete_many({'ticker': ticker_symbol})
-        news_articles_collection.insert_many(news_records)
-        print(f"Stored {len(news_records)} news articles in MongoDB.")
+            # Store historical data
+            historical_df_copy = historical_df.copy()
+            historical_df_copy.reset_index(inplace=True)
+            records = historical_df_copy.to_dict('records')
+            
+            for record in records:
+                record['ticker'] = ticker_symbol
+                # Use date and ticker as a unique identifier to avoid duplicates
+                historical_prices_collection.update_one(
+                    {'Date': record['Date'], 'ticker': ticker_symbol},
+                    {'$set': record},
+                    upsert=True
+                )
+            print(f"Stored {len(records)} historical price points in MongoDB.")
+
+            # Store news articles
+            news_records = []
+            for date, headlines in news_by_date.items():
+                for headline in headlines:
+                    news_records.append({
+                        'date': datetime.strptime(date, '%Y-%m-%d'),
+                        'headline': headline,
+                        'ticker': ticker_symbol
+                    })
+            
+            if news_records:
+                # Delete old news for the ticker to avoid stale data
+                news_articles_collection.delete_many({'ticker': ticker_symbol})
+                news_articles_collection.insert_many(news_records)
+                print(f"Stored {len(news_records)} news articles in MongoDB.")
+                
+        except Exception as e:
+            print(f"Warning: Could not store data in MongoDB: {e}")
+            print("Continuing without database storage...")
+    else:
+        print("Running in offline mode - data not stored in database")
         
     return historical_df # Return dataframe for further processing
 

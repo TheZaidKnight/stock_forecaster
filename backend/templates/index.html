@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Price Forecaster</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        input[type="text"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .submit-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+        
+        .help-text {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .examples {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .examples h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .examples ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .examples li {
+            padding: 5px 0;
+            color: #666;
+        }
+        
+        .examples li:before {
+            content: "• ";
+            color: #667eea;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 Stock Forecaster</h1>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <form action="/forecast" method="post">
+            <div class="form-group">
+                <label for="ticker">Stock Ticker Symbol</label>
+                <input type="text" id="ticker" name="ticker" value="AAPL" required 
+                       placeholder="e.g., AAPL, MSFT, GOOGL">
+                <div class="help-text">Enter the stock symbol you want to forecast</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="days_history">Days of Historical Data</label>
+                <input type="number" id="days_history" name="days_history" value="90" 
+                       min="30" max="365" required>
+                <div class="help-text">More data generally leads to better predictions (30-365 days)</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="forecast_horizon">Forecast Horizon</label>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="number" id="forecast_horizon" name="forecast_horizon" value="7" 
+                           min="1" max="720" required style="flex:1;">
+                    <select id="horizon_unit" name="horizon_unit" style="padding:12px 15px; border:2px solid #e1e5e9; border-radius:8px;">
+                        <option value="days" selected>Days</option>
+                        <option value="hours">Hours</option>
+                    </select>
+                </div>
+                <div class="help-text">Choose days (1-30) or hours (1-72 recommended)</div>
+            </div>
+            
+            <button type="submit" class="submit-btn">🚀 Generate Forecast</button>
+        </form>
+        
+        <div class="examples">
+            <h3>Popular Stock Symbols</h3>
+            <ul>
+                <li>AAPL - Apple Inc.</li>
+                <li>MSFT - Microsoft Corporation</li>
+                <li>GOOGL - Alphabet Inc.</li>
+                <li>TSLA - Tesla Inc.</li>
+                <li>AMZN - Amazon.com Inc.</li>
+                <li>BTC-USD - Bitcoin</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

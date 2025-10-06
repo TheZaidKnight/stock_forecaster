@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forecast Results - {{ ticker }}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .ticker-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .predictions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .prediction-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #007bff;
+        }
+        .prediction-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .prediction-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .chart-container {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .back-button {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+        .back-button:hover {
+            background: #0056b3;
+        }
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="ticker-header">
+            <h1>Forecast Results for {{ ticker }}</h1>
+            <p>Current Price: {{ current_price }} | Historical Data: {{ days_history }} days | Forecast: {{ forecast_horizon }} {{ 'hours' if horizon_unit == 'hours' else 'days' }}</p>
+        </div>
+        
+        {% if predictions %}
+        <div class="predictions-grid">
+            {% for model, prediction in predictions.items() %}
+            <div class="prediction-card">
+                <h3>{{ model }} Forecast</h3>
+                <div class="prediction-value">{{ prediction }}</div>
+                {% if prediction_changes %}
+                <div class="prediction-change" style="font-size: 16px; color: {% if prediction_changes[model].startswith('+') %}#28a745{% else %}#dc3545{% endif %};">
+                    {{ prediction_changes[model] }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Model Performance Metrics -->
+        {% if arima_metrics and lstm_metrics %}
+        <div class="metrics-container" style="margin: 30px 0;">
+            <h3 style="text-align: center; margin-bottom: 20px;">Model Performance Metrics</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h4 style="color: #333; margin-bottom: 15px;">ARIMA Model</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #007bff;">RMSE</div>
+                            <div>{{ "%.4f"|format(arima_metrics.RMSE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #007bff;">MAE</div>
+                            <div>{{ "%.4f"|format(arima_metrics.MAE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #007bff;">MAPE</div>
+                            <div>{{ "%.2f"|format(arima_metrics.MAPE) }}%</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h4 style="color: #333; margin-bottom: 15px;">LSTM Model</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #28a745;">RMSE</div>
+                            <div>{{ "%.4f"|format(lstm_metrics.RMSE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #28a745;">MAE</div>
+                            <div>{{ "%.4f"|format(lstm_metrics.MAE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #28a745;">MAPE</div>
+                            <div>{{ "%.2f"|format(lstm_metrics.MAPE) }}%</div>
+                        </div>
+                    </div>
+                </div>
+                {% if ma_metrics %}
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h4 style="color: #333; margin-bottom: 15px;">Moving Average</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #6c757d;">RMSE</div>
+                            <div>{{ "%.4f"|format(ma_metrics.RMSE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #6c757d;">MAE</div>
+                            <div>{{ "%.4f"|format(ma_metrics.MAE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #6c757d;">MAPE</div>
+                            <div>{{ "%.2f"|format(ma_metrics.MAPE) }}%</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% if gru_metrics %}
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h4 style="color: #333; margin-bottom: 15px;">GRU Model</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #17a2b8;">RMSE</div>
+                            <div>{{ "%.4f"|format(gru_metrics.RMSE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #17a2b8;">MAE</div>
+                            <div>{{ "%.4f"|format(gru_metrics.MAE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #17a2b8;">MAPE</div>
+                            <div>{{ "%.2f"|format(gru_metrics.MAPE) }}%</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% if ensemble_metrics %}
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h4 style="color: #333; margin-bottom: 15px;">Ensemble</h4>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #343a40;">RMSE</div>
+                            <div>{{ "%.4f"|format(ensemble_metrics.RMSE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #343a40;">MAE</div>
+                            <div>{{ "%.4f"|format(ensemble_metrics.MAE) }}</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-weight: bold; color: #343a40;">MAPE</div>
+                            <div>{{ "%.2f"|format(ensemble_metrics.MAPE) }}%</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+        
+        <div class="chart-container">
+            {% if chart_html %}
+                {{ chart_html|safe }}
+            {% else %}
+                <div class="error-message">
+                    <h3>Chart Error</h3>
+                    <p>Unable to generate forecast chart. Please try again with different parameters.</p>
+                </div>
+            {% endif %}
+        </div>
+        
+        <a href="/" class="back-button">← Back to Forecast</a>
+    </div>
+</body>
+</html>
