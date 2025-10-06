@@ -56,11 +56,16 @@ def forecast():
             return redirect(url_for('index'))
 
         # Step 2: Run models
+        # Prepare artifacts directory
+        from datetime import datetime
+        ts = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        base_dir = f"artifacts/{ts}-{ticker}-{horizon_unit}{forecast_horizon}"
+
         print("Running ARIMA model...")
-        arima_preds = get_arima_forecast(historical_data, forecast_horizon)
+        arima_preds = get_arima_forecast(historical_data, forecast_horizon, export_dir=f"{base_dir}/arima")
 
         print("Running LSTM model...")
-        lstm_preds = get_lstm_forecast(historical_data, forecast_horizon)
+        lstm_preds = get_lstm_forecast(historical_data, forecast_horizon, export_dir=f"{base_dir}/lstm")
 
         # Moving Average baseline (traditional)
         from models import get_moving_average_forecast, get_gru_forecast, get_ensemble_forecast
@@ -68,7 +73,7 @@ def forecast():
         ma_preds = get_moving_average_forecast(historical_data, forecast_horizon)
 
         print("Running GRU model...")
-        gru_preds = get_gru_forecast(historical_data, forecast_horizon)
+        gru_preds = get_gru_forecast(historical_data, forecast_horizon, export_dir=f"{base_dir}/gru")
         
         # Step 3: Calculate model performance metrics
         # Use the last portion of historical data for validation

@@ -1,5 +1,8 @@
 import numpy as np
 import pandas as pd
+import os
+import json
+import pickle
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
@@ -46,7 +49,7 @@ def get_model_metrics(y_true, y_pred):
     return {'RMSE': rmse, 'MAE': mae, 'MAPE': mape}
 
 # --- Traditional Model: ARIMA ---
-def get_arima_forecast(historical_data: pd.DataFrame, forecast_steps: int):
+def get_arima_forecast(historical_data: pd.DataFrame, forecast_steps: int, export_dir: str | None = None):
     """
     Trains an ARIMA model with optimized parameters and returns forecasts.
     """
@@ -89,6 +92,20 @@ def get_arima_forecast(historical_data: pd.DataFrame, forecast_steps: int):
             forecast = np.array(forecast)
         else:
             forecast = forecast_diff
+        
+        # Optional export
+        if export_dir:
+            try:
+                os.makedirs(export_dir, exist_ok=True)
+                # Save only lightweight artifacts to avoid large pickles
+                with open(os.path.join(export_dir, 'params.json'), 'w') as f:
+                    json.dump({
+                        'order': list(optimal_params),
+                        'steps': int(forecast_steps)
+                    }, f)
+                np.save(os.path.join(export_dir, 'forecast.npy'), np.asarray(forecast))
+            except Exception as _e:
+                print(f"Warning: failed to export ARIMA artifacts: {_e}")
             
         return forecast
         
@@ -108,7 +125,7 @@ def create_dataset(dataset, time_step=1):
         dataY.append(dataset[i + time_step, 0])
     return np.array(dataX), np.array(dataY)
 
-def get_lstm_forecast(historical_data: pd.DataFrame, forecast_steps: int):
+def get_lstm_forecast(historical_data: pd.DataFrame, forecast_steps: int, export_dir: str | None = None):
     """
     Trains an LSTM model with improved architecture and returns forecasts.
     """
@@ -174,6 +191,18 @@ def get_lstm_forecast(historical_data: pd.DataFrame, forecast_steps: int):
 
         # 6. Inverse transform the predictions
         forecast = scaler.inverse_transform(forecast_scaled)
+
+        # Optional export
+        if export_dir:
+            try:
+                os.makedirs(export_dir, exist_ok=True)
+                model.save(os.path.join(export_dir, 'model.keras'))
+                with open(os.path.join(export_dir, 'scaler.pkl'), 'wb') as f:
+                    pickle.dump(scaler, f)
+                np.save(os.path.join(export_dir, 'forecast.npy'), forecast)
+            except Exception as _e:
+                print(f"Warning: failed to export LSTM artifacts: {_e}")
+
         return forecast.flatten()
         
     except Exception as e:
@@ -201,7 +230,7 @@ def get_moving_average_forecast(historical_data: pd.DataFrame, forecast_steps: i
 
 
 # --- Neural Model: GRU ---
-def get_gru_forecast(historical_data: pd.DataFrame, forecast_steps: int):
+def get_gru_forecast(historical_data: pd.DataFrame, forecast_steps: int, export_dir: str | None = None):
     """
     Trains a GRU model and returns forecasts similar to LSTM flow.
     """
@@ -245,6 +274,18 @@ def get_gru_forecast(historical_data: pd.DataFrame, forecast_steps: int):
             current_input = new_input
 
         forecast = scaler.inverse_transform(forecast_scaled)
+
+        # Optional export
+        if export_dir:
+            try:
+                os.makedirs(export_dir, exist_ok=True)
+                model.save(os.path.join(export_dir, 'model.keras'))
+                with open(os.path.join(export_dir, 'scaler.pkl'), 'wb') as f:
+                    pickle.dump(scaler, f)
+                np.save(os.path.join(export_dir, 'forecast.npy'), forecast)
+            except Exception as _e:
+                print(f"Warning: failed to export GRU artifacts: {_e}")
+
         return forecast.flatten()
     except Exception as _e:
         last_price = historical_data['Close'].iloc[-1]
